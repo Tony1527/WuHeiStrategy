@@ -97,7 +97,7 @@ def initialize(account):
 
                              
     #每个月第二个交易日进行一次多因子的筛选
-    schedule_function(func=strategy, date_rule=date_rules.month_start(20))
+    schedule_function(func=strategy, date_rule=date_rules.month_start(21))
     log.info('执行完init')
     
 
@@ -1130,8 +1130,9 @@ def getTable(data,securities,factors,curDate,lags):
             # log.info("**************************")
             # log.info("data from DB:",df_temp)
             
-            if not df_temp.empty:     #if df is not empty
+            if not df_temp.dropna().empty:     #if df is not empty
                 rowName = security+'_lag'+str(i)
+                
                 
                 table.ix[rowName] = df_temp.ix[security]   #move data
                 
