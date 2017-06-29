@@ -49,8 +49,8 @@ def initialize(account):
     account.win_param = 1                                  #赢的参数，越小说明当股票有较小波动时，动作越频繁
     account.loss_limit_param = 0.5                           #止损参数，越小说明越保守
     account.profit_limit_param = 0.8                         #止赢参数
-    account.stats = {}                                     #股票输赢统计表
-    account.history_securities={}       #历史上被选中过的股票
+    g.stats = {}                                     #股票输赢统计表
+    g.history_securities={}       #历史上被选中过的股票
     account.avgreg_range=[i for i in range(-20,-1)]       #均值回归范围
     
 
@@ -59,12 +59,12 @@ def initialize(account):
         
     
     #全局重要变量
-    account.stock_info = {}                                #股票信息记录表，包括记录（震荡期止盈线/止损线/已持有天数/胜率/方差/震荡方向），以及（全局的仓位线，初始分配金额）
-    account.N = 0                                          #所有被多因子选出的股票数量
-    account.securities=[]                                  #股票池，是指所有未停牌的沪深300的股票
+    g.stock_info = {}                                #股票信息记录表，包括记录（震荡期止盈线/止损线/已持有天数/胜率/方差/震荡方向），以及（全局的仓位线，初始分配金额）
+    g.N = 0                                          #所有被多因子选出的股票数量
+    g.securities=[]                                  #股票池，是指所有未停牌的沪深300的股票
     #account.max_drawback = 0.1                            #最大回撤参数    
-    account.model = 'wave'                                 #模型初始状态为震荡态
-    account.first_run = True                               #是否第一次运行
+    g.model = 'wave'                                 #模型初始状态为震荡态
+    g.first_run = True                               #是否第一次运行
     account.trend_circle = 2                                            #震荡态与趋势态转换周期
     account.trend_times = 0                                             #变动次数，当达到转换周期时，则转换状态
     account.hold_N = 0.4                                                #默认长期持有股票数    
@@ -73,13 +73,13 @@ def initialize(account):
     account.direction = True    
     
     #股票集合
-    #其中account.tobuy = account.trend_tobuy.union(account.wave_tobuy) 
-    account.tobuy=set()                                    #应买股票                   
-    account.trend_tobuy=set()                              #趋势期股票
-    account.wave_tobuy=set()                               #震荡期股票
-    account.long_hold=set()                                #长期持仓股票    
-    account.all_set=set()
-    account.overbought=set()
+    #其中g.tobuy = g.trend_tobuy.union(g.wave_tobuy) 
+    g.tobuy=set()                                    #应买股票                   
+    g.trend_tobuy=set()                              #趋势期股票
+    g.wave_tobuy=set()                               #震荡期股票
+    g.long_hold=set()                                #长期持仓股票    
+    g.all_set=set()
+    g.overbought=set()
     
     
     
@@ -106,12 +106,12 @@ def initialize(account):
 # 设置买卖条件，每个交易频率（日/分钟/tick）调用一次   
 def handle_data(account,data):
     log.info('开始执行handle_data')
-    if not account.first_run:               #第一次应先运行多因子策略进行选股
+    if not g.first_run:               #第一次应先运行多因子策略进行选股
         
         #每天增量添加数据
-        for security in account.history_securities:      
-            update_stat(account,data,security,account.stats[security])
-        account.overbought=set()    
+        for security in g.history_securities:      
+            update_stat(account,data,security,g.stats[security])
+        g.overbought=set()    
         
         remove=set();
         for security in account.positions:
@@ -119,26 +119,26 @@ def handle_data(account,data):
                 remove.add(security)
         for security in remove:
             order_target_value(security, 0)
-            if security in account.long_hold:
-                account.long_hold.remove(security)
-            elif security in account.wave_tobuy:
-                account.wave_tobuy.remove(security)
-            elif security in account.trend_tobuy:
-                account.trend_tobuy.remove(security)
+            if security in g.long_hold:
+                g.long_hold.remove(security)
+            elif security in g.wave_tobuy:
+                g.wave_tobuy.remove(security)
+            elif security in g.trend_tobuy:
+                g.trend_tobuy.remove(security)
             
-        log.info(['handle_data开始',len(account.wave_tobuy),len(account.trend_tobuy),len(account.tobuy),len(account.long_hold),len(account.positions)])                
+        log.info(['handle_data开始',len(g.wave_tobuy),len(g.trend_tobuy),len(g.tobuy),len(g.long_hold),len(account.positions)])                
         
         
         #多只股票的布林线收开头统计                
         count=1                                                     
-        for security in account.tobuy:         #注意，此处的迭代对象必须与下面跟count进行比较的一样！
+        for security in g.tobuy:         #注意，此处的迭代对象必须与下面跟count进行比较的一样！
             if(bolling(account,data,security)):
                count+=1
         
         #金字塔调仓
         adjustPyramidPositions(account,data,account.positions)
         
-        for security in account.all_set:
+        for security in g.all_set:
             price = data.attribute_history(security, fre_step='1d', fields=['high','low'], skip_paused = False, fq = None, bar_count=9)
 
             Hn = max(price['high'])
@@ -147,35 +147,35 @@ def handle_data(account,data):
             WR = (last_price - Hn)/(Hn-Ln)
             #     account.WR.append(WR)
             if WR>-0.15:
-                account.stock_info[security]['WR'] = 1
-                account.overbought.add(security)
+                g.stock_info[security]['WR'] = 1
+                g.overbought.add(security)
             elif WR<=-0.15 and WR>=-0.85:
-                account.stock_info[security]['WR'] = 0
+                g.stock_info[security]['WR'] = 0
             else:
-                account.stock_info[security]['WR'] = -1
+                g.stock_info[security]['WR'] = -1
 
             
         #调整长期持有的股票
         switchLongHold(account,data)    
         
         
-        log.info(["overbought",account.overbought])
+        log.info(["overbought",g.overbought])
         #卖出震荡期股票
         wave_tosell = wave_sell(account,data)
-        account.wave_tobuy = account.wave_tobuy - wave_tosell
+        g.wave_tobuy = g.wave_tobuy - wave_tosell
         
         
         #卖出趋势期股票
-        account.trend_tobuy = account.trend_tobuy - trend_sell(account,data,account.trend_tobuy)
+        g.trend_tobuy = g.trend_tobuy - trend_sell(account,data,g.trend_tobuy)
                    
                                        
         
         
-        #day_market_info = data.history(account.securities, 'close', bar_count=1, fre_step='1d', skip_paused = True, fq = None, is_panel = 1)
-        #month_market_info = data.history(account.securities, 'close', bar_count=20, fre_step='1d', skip_paused = True, fq = None, is_panel = 1)
+        #day_market_info = data.history(g.securities, 'close', bar_count=1, fre_step='1d', skip_paused = True, fq = None, is_panel = 1)
+        #month_market_info = data.history(g.securities, 'close', bar_count=20, fre_step='1d', skip_paused = True, fq = None, is_panel = 1)
         
-        day_market_info = data.history(account.all_set, 'close', bar_count=1, fre_step='1d', skip_paused = True, fq = None, is_panel = 1)
-        month_market_info = data.history(account.all_set, 'close', bar_count=15, fre_step='1d', skip_paused = True, fq = None, is_panel = 1)
+        day_market_info = data.history(g.all_set, 'close', bar_count=1, fre_step='1d', skip_paused = True, fq = None, is_panel = 1)
+        month_market_info = data.history(g.all_set, 'close', bar_count=15, fre_step='1d', skip_paused = True, fq = None, is_panel = 1)
         
         #log.info(['market_info',day_market_info,month_market_info])
         if not day_market_info.empty and not month_market_info.empty:
@@ -193,82 +193,82 @@ def handle_data(account,data):
             trend_tosell = []
             wave_tosell = []
             long_hold_tosell = []
-            for security in account.trend_tobuy:
+            for security in g.trend_tobuy:
                 price = data.attribute_history(security, fields=['close'], bar_count=2, fre_step='1d', skip_paused=True, fq=None)['close']
                 if (price[1]-price[0])/price[0]<=-0.02:
                     trend_tosell.append(security)
 
-            for security in account.wave_tobuy:
+            for security in g.wave_tobuy:
                 price = data.attribute_history(security, fields=['close'], bar_count=2, fre_step='1d', skip_paused=True, fq=None)['close']
                 if (price[1]-price[0])/price[0]<=-0.02:
                     wave_tosell.append(security)
                     
-            for security in account.long_hold:
+            for security in g.long_hold:
                 price = data.attribute_history(security, fields=['close'], bar_count=2, fre_step='1d', skip_paused=True, fq=None)['close']
                 if (price[1]-price[0])/price[0]<=-0.02:
                     long_hold_tosell.append(security)
                     
                     
-            account.trend_tobuy = account.trend_tobuy - sell_stocks(account,data,trend_tosell)
-            account.wave_tobuy = account.wave_tobuy - wave_sell_stock(account,data,wave_tosell)
+            g.trend_tobuy = g.trend_tobuy - sell_stocks(account,data,trend_tosell)
+            g.wave_tobuy = g.wave_tobuy - wave_sell_stock(account,data,wave_tosell)
 
-            account.tobuy = account.tobuy.union(long_hold_tosell)
-            account.long_hold = account.long_hold - sell_stocks(account,data,long_hold_tosell)
+            g.tobuy = g.tobuy.union(long_hold_tosell)
+            g.long_hold = g.long_hold - sell_stocks(account,data,long_hold_tosell)
             
 
         elif account.direction:
             #如果当前市场是震荡型，则执行均线回归策略
-            if account.model == 'wave':         
-                if count >= len(account.tobuy)/2.0:                                 #如果半数以上的股票表现出趋势型，则认为将变动次数加1，否则将变动次数重置
+            if g.model == 'wave':         
+                if count >= len(g.tobuy)/2.0:                                 #如果半数以上的股票表现出趋势型，则认为将变动次数加1，否则将变动次数重置
                     account.trend_times+=1
                 else:
                     account.trend_times=0                                   
             
                 if  account.trend_times>=account.trend_circle:                      #在连续转换周期X天内都表现成趋势型，则认为现在是趋势市场
-                    account.model = 'trend'
-                    account.wave_tobuy = set([i for i in account.wave_tobuy if i in account.positions])#保留已经在仓位中的震荡期股票
+                    g.model = 'trend'
+                    g.wave_tobuy = set([i for i in g.wave_tobuy if i in account.positions])#保留已经在仓位中的震荡期股票
                 else:
-                    account.wave_tobuy = account.tobuy - account.trend_tobuy        #初始化震荡期股票，待买股票集合与趋势期股票的差集
-                    wave_buy = wave_buy_signal(account,data,account.wave_tobuy,account.stats)
+                    g.wave_tobuy = g.tobuy - g.trend_tobuy        #初始化震荡期股票，待买股票集合与趋势期股票的差集
+                    wave_buy = wave_buy_signal(account,data,g.wave_tobuy,g.stats)
                     wave_buy_stock(account,data,wave_tosell,wave_buy)    
                             
                         
             #如果当前市场是趋势型，则执行唐奇安策略    
-            if account.model == 'trend':
-                if count < len(account.tobuy)/2.0:                        #如果少于半数的股票表现出震荡型，则认为将变动次数减1，否则将变动次数重置为转换周期
+            if g.model == 'trend':
+                if count < len(g.tobuy)/2.0:                        #如果少于半数的股票表现出震荡型，则认为将变动次数减1，否则将变动次数重置为转换周期
                     account.trend_times-=1
                 else:
                     account.trend_times=account.trend_circle
                 
                 if  account.trend_times<=0:                              #在连续转换周期X天内都表现成震荡型，则认为现在是震荡市场
-                    account.model = 'wave'
-                    account.trend_tobuy = set([i for i in account.trend_tobuy if i in account.positions])
+                    g.model = 'wave'
+                    g.trend_tobuy = set([i for i in g.trend_tobuy if i in account.positions])
                 else:
-                    account.trend_tobuy = account.tobuy-account.wave_tobuy        
+                    g.trend_tobuy = g.tobuy-g.wave_tobuy        
                     trend_buy_stock(account,data)
                     
                 
                 #威廉指标出现超卖
                 '''  upgrade_stocks = set()
-                for security in account.tobuy:
-                    if account.stock_info[security]['WR'] == -1:
+                for security in g.tobuy:
+                    if g.stock_info[security]['WR'] == -1:
                         upgrade_stocks.add(security)
-                        if security in account.trend_tobuy:
-                            account.trend_tobuy = account.trend_tobuy - set([security])
+                        if security in g.trend_tobuy:
+                            g.trend_tobuy = g.trend_tobuy - set([security])
                         else:
                             init_wave_security(account,data,security)
-                            account.wave_tobuy = account.wave_tobuy - set([security])
+                            g.wave_tobuy = g.wave_tobuy - set([security])
                 for security in upgrade_stocks:
-                    account.stock_info[security]['position'] = 2
+                    g.stock_info[security]['position'] = 2
                     log.info('超卖')
                     balance(account,data,security)
-                account.tobuy = account.tobuy - upgrade_stocks
-                account.long_hold = account.long_hold.union(upgrade_stocks)'''
+                g.tobuy = g.tobuy - upgrade_stocks
+                g.long_hold = g.long_hold.union(upgrade_stocks)'''
             
             #威廉指标出现超卖
-                for security in account.trend_tobuy:
-                    if account.stock_info[security]['WR'] == -1:
-                        account.stock_info[security]['position'] = 0
+                for security in g.trend_tobuy:
+                    if g.stock_info[security]['WR'] == -1:
+                        g.stock_info[security]['position'] = 0
                         #log.info('超卖')
                         balance(account,data,security)
                     
@@ -277,8 +277,8 @@ def handle_data(account,data):
                    
                 
         #打印当前的市场状态，服务器与浏览器的连接可能会导致出现丢包现象
-        log.info(account.model)  
-        log.info(['handle_data结束',len(account.wave_tobuy),len(account.trend_tobuy),len(account.tobuy),len(account.long_hold),len(account.positions)])    
+        log.info(g.model)  
+        log.info(['handle_data结束',len(g.wave_tobuy),len(g.trend_tobuy),len(g.tobuy),len(g.long_hold),len(account.positions)])    
         record(portfolio_value=account.capital_used)
         account.last_portfolio = account.portfolio_value
 
@@ -288,33 +288,33 @@ def strategy(account,data):
     log.info('in strategy')
     if account.T == 1:
         #获得股票股票池
-        account.securities =get_feasible_stocks(data,account.iwencai_securities,20)## get_index_stocks('000300.SH', get_datetime().strftime('%Y%m%d'))#account.iwencai_securities[80:160]#get_feasible_stocks(account.iwencai_securities,1)[:20]    #设置可行股票池
+        g.securities =get_feasible_stocks(data,account.iwencai_securities,20)## get_index_stocks('000300.SH', get_datetime().strftime('%Y%m%d'))#account.iwencai_securities[80:160]#get_feasible_stocks(account.iwencai_securities,1)[:20]    #设置可行股票池
         
         
         #获得当期因子数据，
         curTime = get_datetime()
         year,lag = getLastQuarter(curTime)
-        q = FinanceFactorsQuery(account.securities,account.DB_factors)
+        q = FinanceFactorsQuery(g.securities,account.DB_factors)
         df_now = getFundamentals(q,statDate="%dq%d"%(year,lag))     #获得当前股票信息
         
         count=1
         #如果当期数据取回来是空，则一直往上取，直到取到财务因子数据
         while df_now.empty:
             year,lag = getLastQuarter('%dq%d'%(year,lag))
-            q = FinanceFactorsQuery(account.securities,account.DB_factors)
+            q = FinanceFactorsQuery(g.securities,account.DB_factors)
             df_now = getFundamentals(q,statDate="%dq%d"%(year,lag))     #获得当前股票信息
             count+=1
             if count==8:
                 break
                         #扩充技术因子
         df_now = df_now.reindex(columns = account.factors_extend)
-        for security in account.securities:
+        for security in g.securities:
             extendTable(security,parseQuarter(year,lag),df_now)      
         
         
         
         #获取所有股票往期总共account.lags的财务与技术因子
-        table = getTable(data,account.securities,account.finance_factors,curTime,account.lags)
+        table = getTable(data,g.securities,account.finance_factors,curTime,account.lags)
         #log.info(table.head())
         
         
@@ -348,25 +348,25 @@ def strategy(account,data):
                     security = points.index[i]
                     tobuy.add(security)
                     
-                log.info(['stratagy开始',len(account.wave_tobuy),len(account.trend_tobuy),len(account.tobuy),len(account.long_hold),len(account.positions)])
+                log.info(['stratagy开始',len(g.wave_tobuy),len(g.trend_tobuy),len(g.tobuy),len(g.long_hold),len(account.positions)])
                 #调仓
-                wave_tosell = [security for security in account.wave_tobuy if security not in tobuy]
-                trend_tosell = [security for security in account.trend_tobuy if security not in tobuy]
-                long_hold_tosell = [security for security in account.long_hold if security not in tobuy]
+                wave_tosell = [security for security in g.wave_tobuy if security not in tobuy]
+                trend_tosell = [security for security in g.trend_tobuy if security not in tobuy]
+                long_hold_tosell = [security for security in g.long_hold if security not in tobuy]
                 
                 #将不在待买股票池中的股票都卖出
-                account.long_hold = account.long_hold - sell_stocks(account,data,long_hold_tosell)
-                account.trend_tobuy = account.trend_tobuy  -  sell_stocks(account,data,trend_tosell)
-                account.wave_tobuy = account.wave_tobuy - wave_sell_stock(account,data,wave_tosell)
+                g.long_hold = g.long_hold - sell_stocks(account,data,long_hold_tosell)
+                g.trend_tobuy = g.trend_tobuy  -  sell_stocks(account,data,trend_tosell)
+                g.wave_tobuy = g.wave_tobuy - wave_sell_stock(account,data,wave_tosell)
                 
-                account.long_hold = account.long_hold.intersection(tobuy)
-                account.trend_tobuy = account.trend_tobuy.intersection(tobuy)
-                account.wave_tobuy = account.wave_tobuy.intersection(tobuy)
+                g.long_hold = g.long_hold.intersection(tobuy)
+                g.trend_tobuy = g.trend_tobuy.intersection(tobuy)
+                g.wave_tobuy = g.wave_tobuy.intersection(tobuy)
 
 
-  #根据市场行情设定account.long_hold应该持有几只股票，行情好的话持有account.hold_N*len_tobuy，不好的话持有account.hold_N*len_tobuy/2                
-                day_market_info = data.history(account.securities, 'close', bar_count=1, fre_step='1d', skip_paused = True, fq = None, is_panel = 1)
-                month_market_info = data.history(account.securities, 'close', bar_count=15, fre_step='1d', skip_paused = True, fq = None, is_panel = 1)                
+  #根据市场行情设定g.long_hold应该持有几只股票，行情好的话持有account.hold_N*len_tobuy，不好的话持有account.hold_N*len_tobuy/2                
+                day_market_info = data.history(g.securities, 'close', bar_count=1, fre_step='1d', skip_paused = True, fq = None, is_panel = 1)
+                month_market_info = data.history(g.securities, 'close', bar_count=15, fre_step='1d', skip_paused = True, fq = None, is_panel = 1)                
 
                 if not day_market_info.empty and not month_market_info.empty:
                     day_market_price = day_market_info['close'].mean().mean()
@@ -379,86 +379,86 @@ def strategy(account,data):
                     padding_long_hold = account.hold_N*len_tobuy/2
                 
                 for i in range(len_tobuy):
-                    if padding_long_hold >len(account.long_hold) and points.index[i] not in account.long_hold:
-                        account.long_hold.add(points.index[i])
-                        if points.index[i] in account.trend_tobuy:
-                            account.trend_tobuy.remove(points.index[i])
-                        elif points.index[i] in account.wave_tobuy:
+                    if padding_long_hold >len(g.long_hold) and points.index[i] not in g.long_hold:
+                        g.long_hold.add(points.index[i])
+                        if points.index[i] in g.trend_tobuy:
+                            g.trend_tobuy.remove(points.index[i])
+                        elif points.index[i] in g.wave_tobuy:
                             init_wave_security(account,data,points.index[i])
-                            account.stock_info[points.index[i]]['position'] = 0
-                            account.wave_tobuy.remove(points.index[i])
-                    elif padding_long_hold <=len(account.long_hold):
+                            g.stock_info[points.index[i]]['position'] = 0
+                            g.wave_tobuy.remove(points.index[i])
+                    elif padding_long_hold <=len(g.long_hold):
                         break
                 
                 
-                account.N = len(tobuy)
+                g.N = len(tobuy)
                 
     
-                account.tobuy = tobuy - account.long_hold
-                account.all_set = tobuy         
+                g.tobuy = tobuy - g.long_hold
+                g.all_set = tobuy         
                 
                 #对于stock_info表的初始化
                 for security in tobuy:
-                    account.history_securities[security]=1
+                    g.history_securities[security]=1
                 
                 
-                for security in account.history_securities:      
-                    if security not in account.stock_info:  
+                for security in g.history_securities:      
+                    if security not in g.stock_info:  
                         init_stats(account,data,security)
                 
                 #设置平均分配
                 for security in tobuy:
-                    account.stock_info[security]['allocation'] = account.portfolio_value/account.N
+                    g.stock_info[security]['allocation'] = account.portfolio_value/g.N
                 
                 
                 #长期持有的股票
-                for security in account.long_hold:
-                    account.stock_info[security]['position'] = 2
+                for security in g.long_hold:
+                    g.stock_info[security]['position'] = 2
                 
-            log.info(['stratagy结束',len(account.wave_tobuy),len(account.trend_tobuy),len(account.tobuy),len(account.long_hold),len(account.positions)])                    
+            log.info(['stratagy结束',len(g.wave_tobuy),len(g.trend_tobuy),len(g.tobuy),len(g.long_hold),len(account.positions)])                    
                 
             
             account.T=0
-            account.first_run = False
+            g.first_run = False
     account.T+=1
 
 
 #长期持有股票的与待买股票的轮转
 def switchLongHold(account,data):
     #将表现较差的股票从长期持有股票集合中删除
-    bad_stocks =  trend_sell(account,data,account.long_hold)    
-    account.long_hold = account.long_hold - bad_stocks
-    account.tobuy = account.tobuy.union(bad_stocks)
+    bad_stocks =  trend_sell(account,data,g.long_hold)    
+    g.long_hold = g.long_hold - bad_stocks
+    g.tobuy = g.tobuy.union(bad_stocks)
     
     
     
     #升级应买股票为长期持有股票
     upgrade_stocks = set()
-    for security in account.tobuy:
-        if account.stock_info[security]['position'] == 2:
+    for security in g.tobuy:
+        if g.stock_info[security]['position'] == 2:
             upgrade_stocks.add(security)
-            if security in account.trend_tobuy:
-                account.trend_tobuy = account.trend_tobuy - set([security])
+            if security in g.trend_tobuy:
+                g.trend_tobuy = g.trend_tobuy - set([security])
             else:
                 init_wave_security(account,data,security)
-                account.wave_tobuy = account.wave_tobuy - set([security])
-    account.tobuy = account.tobuy - upgrade_stocks
-    account.long_hold = account.long_hold.union(upgrade_stocks)
+                g.wave_tobuy = g.wave_tobuy - set([security])
+    g.tobuy = g.tobuy - upgrade_stocks
+    g.long_hold = g.long_hold.union(upgrade_stocks)
 
     
     
     #调整仓位
-    for security in account.long_hold: 
+    for security in g.long_hold: 
         balance(account,data,security)
 
 
 
 
 def trend_buy_stock(account,data):
-    for security in account.trend_tobuy:
+    for security in g.trend_tobuy:
          current_price = data.current(security)[security].open
          high = getHigh(account,data,security)
-         if current_price>=high and security not in account.overbought and security not in account.positions:
+         if current_price>=high and security not in g.overbought and security not in account.positions:
              log.info("security:{s},tobuy:high = {h} ,current = {o}".format(s = security,h=high,o=current_price))
              balance(account,data,security)
 
@@ -469,9 +469,9 @@ def trend_buy_stock(account,data):
 #获得过去几年的输赢统计表，并初始化股票信息记录表
 #security:待初始化的股票
 def init_stats(account,data,security):
-    account.stats[security] = statistic_data(account,data,security)
+    g.stats[security] = statistic_data(account,data,security)
     #股票信息记录表，包括记录（震荡期止盈线/止损线/已持有天数/胜率/方差/震荡方向），以及金字塔仓位线，初始分配金额
-    account.stock_info[security] = {'avgreg_profit_limit':0,'avgreg_loss_limit':0,'days':account.after_days-1,'ratio':0,'sigma':0,'type':'plane','position':0,'allocation':0,'WR':0}
+    g.stock_info[security] = {'avgreg_profit_limit':0,'avgreg_loss_limit':0,'days':account.after_days-1,'ratio':0,'sigma':0,'type':'plane','position':0,'allocation':0,'WR':0}
 
 
 
@@ -528,8 +528,8 @@ def getLow(account,data,security,interval=10):
 
 
 #这两个log可以方便的查看所有股票集合
-# log.info(['开始',len(account.wave_tobuy),len(account.trend_tobuy),len(account.tobuy),len(account.long_hold),len(account.positions)])                
-# log.info(['结束',len(account.wave_tobuy),len(account.trend_tobuy),len(account.tobuy),len(account.long_hold),len(account.positions)])                
+# log.info(['开始',len(g.wave_tobuy),len(g.trend_tobuy),len(g.tobuy),len(g.long_hold),len(account.positions)])                
+# log.info(['结束',len(g.wave_tobuy),len(g.trend_tobuy),len(g.tobuy),len(g.long_hold),len(account.positions)])                
 
 
 
@@ -543,57 +543,57 @@ def adjustPyramidPositions(account,data,securities):
         price = data.attribute_history(security, fields=['close'], bar_count=6, fre_step='1d', skip_paused=True, fq=None)['close']
         MA5 = price[:-1].mean()
         if (price[-1]-MA5)/MA5>=0.02:                           #如果昨日价格大于MA5的2%,则认为是利好信号，进行逐步加仓
-            if account.stock_info[security]['position']<0:      #如果原来仓位小于2/3,直接加到2/3
-                account.stock_info[security]['position'] = 0 
-            if account.stock_info[security]['position']!=2:   #不超过最大仓位1
-                account.stock_info[security]['position']+=1
+            if g.stock_info[security]['position']<0:      #如果原来仓位小于2/3,直接加到2/3
+                g.stock_info[security]['position'] = 0 
+            if g.stock_info[security]['position']!=2:   #不超过最大仓位1
+                g.stock_info[security]['position']+=1
                
         elif (price[-1]-MA5)/MA5<=-0.02:                        #如果日涨跌幅小于3%，则不认为是利好信号，进行适当减仓
-            #if account.stock_info[security]['position']>0:      #如果原来仓位大于于2/3,直接减到1/3
-            #    account.stock_info[security]['position']=-1
-            if account.stock_info[security]['position']!=-3:  #不超过最小仓位0
-                account.stock_info[security]['position']-=1    
-            if account.stock_info[security]['position'] == -3:
-                if security in (account.tobuy-account.wave_tobuy):
+            #if g.stock_info[security]['position']>0:      #如果原来仓位大于于2/3,直接减到1/3
+            #    g.stock_info[security]['position']=-1
+            if g.stock_info[security]['position']!=-3:  #不超过最小仓位0
+                g.stock_info[security]['position']-=1    
+            if g.stock_info[security]['position'] == -3:
+                if security in (g.tobuy-g.wave_tobuy):
                     trend_remove.add(security)                    
-                elif security in account.long_hold:
+                elif security in g.long_hold:
                     long_hold_remove.add(security)
-                elif security in account.wave_tobuy:
-                    if account.stock_info[security]['type']=='up':
+                elif security in g.wave_tobuy:
+                    if g.stock_info[security]['type']=='up':
                         wave_remove.add(security)
                      
     for security in trend_remove:
-        account.trend_tobuy = account.trend_tobuy - sell_stocks(account,data,[security])
-        account.stock_info[security]['position']=0
+        g.trend_tobuy = g.trend_tobuy - sell_stocks(account,data,[security])
+        g.stock_info[security]['position']=0
         
         
     for security in long_hold_remove:
-        account.long_hold = account.long_hold - sell_stocks(account,data,[security])
-        account.stock_info[security]['position']=0
+        g.long_hold = g.long_hold - sell_stocks(account,data,[security])
+        g.stock_info[security]['position']=0
     
     for security in wave_remove:
-        account.wave_tobuy = account.wave_tobuy - sell_stocks(account,data,[security])
-        account.stock_info[security]['position']=0
+        g.wave_tobuy = g.wave_tobuy - sell_stocks(account,data,[security])
+        g.stock_info[security]['position']=0
         
-    account.tobuy = account.tobuy.union(trend_remove)
-    account.tobuy = account.tobuy.union(long_hold_remove)
-    account.tobuy = account.tobuy.union(wave_remove)    
+    g.tobuy = g.tobuy.union(trend_remove)
+    g.tobuy = g.tobuy.union(long_hold_remove)
+    g.tobuy = g.tobuy.union(wave_remove)    
                  
 #初始化震荡期的股票
 def init_wave_security(account,data,security):
-    account.stock_info[security]['avgreg_profit_limit']=0
-    account.stock_info[security]['avgreg_loss_limit']=0
-    account.stock_info[security]['days']=account.after_days-1
-    account.stock_info[security]['ratio']=0
-    account.stock_info[security]['sigma']=0
-    account.stock_info[security]['type']='plane'
+    g.stock_info[security]['avgreg_profit_limit']=0
+    g.stock_info[security]['avgreg_loss_limit']=0
+    g.stock_info[security]['days']=account.after_days-1
+    g.stock_info[security]['ratio']=0
+    g.stock_info[security]['sigma']=0
+    g.stock_info[security]['type']='plane'
 
 
 #根据金字塔仓位调整股票持仓数
 #计算公式 目标持仓 = 单只股票最大金额 * 金字塔仓位
 def balance(account,data,security):
-    value = getMoney(account,data,security)*account.const_positions[account.stock_info[security]['position']]
-    #log.info(['value',account.stock_info[security]['position']])
+    value = getMoney(account,data,security)*account.const_positions[g.stock_info[security]['position']]
+    #log.info(['value',g.stock_info[security]['position']])
     if abs((value-account.positions[security].position_value))/account.positions[security].position_value>0.1:  #调整仓位时，最小分配规模为10%
         order_target_value(security, value)
         
@@ -601,18 +601,18 @@ def balance(account,data,security):
 #获得单只股票的最大金额
 #计算公式：单只股票最大金额 = 初始分配金额-持仓成本+持仓市值
 def getMoney(account,data,security):
-    #log.info([account.stock_info[security]['allocation'],account.positions[security].cost_basis*account.positions[security].total_amount,account.positions[security].position_value])
-    return account.stock_info[security]['allocation']-account.positions[security].cost_basis*account.positions[security].total_amount+account.positions[security].position_value
+    #log.info([g.stock_info[security]['allocation'],account.positions[security].cost_basis*account.positions[security].total_amount,account.positions[security].position_value])
+    return g.stock_info[security]['allocation']-account.positions[security].cost_basis*account.positions[security].total_amount+account.positions[security].position_value
 
 #利用凯利公式对均线回归的股票进行仓位管理
 #计算公式:f = p/c-q/b
 #其中p为前面得到的最佳范围对应的胜率，q为败率，b为赢钱率，c为赔钱率
 def balance_for_avgreg(account,data,security):
-    p = account.stock_info[security]['ratio']
+    p = g.stock_info[security]['ratio']
     q = 1-p
-    b = account.win_param*account.stock_info[security]['sigma']/data.current(security)[security].prev_close
-    c = account.lose_param*account.stock_info[security]['sigma']/data.current(security)[security].prev_close
-    if account.stock_info[security]['sigma']==0:
+    b = account.win_param*g.stock_info[security]['sigma']/data.current(security)[security].prev_close
+    c = account.lose_param*g.stock_info[security]['sigma']/data.current(security)[security].prev_close
+    if g.stock_info[security]['sigma']==0:
         order_targe_value=(security,0)
     else:
         f = p/c-q/b
@@ -634,8 +634,8 @@ def balance_for_avgreg(account,data,security):
 
 #卖出震荡期股票
 def wave_sell(account,data):
-    wave_tosell = wave_sell_signal(account,data,account.wave_tobuy)
-    account.wave_tobuy = account.wave_tobuy - set(wave_tosell)            #将待卖出股票从当前的震荡期股票删除（只要就是为了处理在状态转换时的余留的股票）
+    wave_tosell = wave_sell_signal(account,data,g.wave_tobuy)
+    g.wave_tobuy = g.wave_tobuy - set(wave_tosell)            #将待卖出股票从当前的震荡期股票删除（只要就是为了处理在状态转换时的余留的股票）
     return wave_sell_stock(account,data,wave_tosell)                      #此处返回待卖出的股票是为了防止止损后继续买入
                                                          
 
@@ -648,20 +648,20 @@ def trend_sell(account,data,tosell):
         low = getLow(account,data,security)                             #唐奇安通道的下通道
         MA20 = data.attribute_history(security,fields=['close'],bar_count=20,skip_paused=True, fq=None,fre_step='1d')['close'].mean()
         
-        if (current_price <=low or account.stock_info[security]['WR']==1):    #如果达到止损要求，则将要卖出股票加入remove集合，否则对其调整仓位current_price <= drawback_price or 
-            if account.stock_info[security]['WR']==1:
+        if (current_price <=low or g.stock_info[security]['WR']==1):    #如果达到止损要求，则将要卖出股票加入remove集合，否则对其调整仓位current_price <= drawback_price or 
+            if g.stock_info[security]['WR']==1:
                 #log.info('超买')
                 if current_price >= MA20 and account.direction ==True:
-                    account.overbought.remove(security)
+                    g.overbought.remove(security)
                     #log.info('超买取消')
                     continue;
     
-            account.stock_info[security]['position']=0
-            account.stock_info[security]['type']='plane'
+            g.stock_info[security]['position']=0
+            g.stock_info[security]['type']='plane'
             log.info("security:{s},tosell:current = {o},low={l}".format(s=security,o=current_price,l=low))
             remove.add(security)
         else:
-            #if account.stock_info[security]['position'] == -3:
+            #if g.stock_info[security]['position'] == -3:
             #    remove.add(security)
             #else:
             balance(account,data,security)
@@ -788,31 +788,31 @@ def wave_buy_signal(account,data,securities,stats):
                 
                 #计算偏离度/最佳范围/止损线/止盈线，判断偏离度是否在最佳范围内
                 difference_times_sigma = int((float(cur_price-MA30)/float(sigma+1)*10))
-                #log.info(account.stock_info[security])    
+                #log.info(g.stock_info[security])    
                 
                     
                     
                 #当前偏移量在最佳范围内，则将其买入    
                 if difference_times_sigma>=stock_best_range['low'] and difference_times_sigma<=stock_best_range['high'] and account.positions[security].total_amount==0:
-                    if account.stock_info[security]['avgreg_loss_limit'] == 0 and account.stock_info[security]['avgreg_profit_limit'] == 0:
-                        account.stock_info[security]['avgreg_loss_limit'] = cur_price-account.loss_limit_param*sigma
-                        account.stock_info[security]['avgreg_profit_limit'] = cur_price+account.profit_limit_param*sigma
+                    if g.stock_info[security]['avgreg_loss_limit'] == 0 and g.stock_info[security]['avgreg_profit_limit'] == 0:
+                        g.stock_info[security]['avgreg_loss_limit'] = cur_price-account.loss_limit_param*sigma
+                        g.stock_info[security]['avgreg_profit_limit'] = cur_price+account.profit_limit_param*sigma
                         
                         
                         
     
                         
                         if range_lose+range_win!=0:
-                            account.stock_info[security]['ratio'] = stock_best_range['ratio']
-                            account.stock_info[security]['sigma'] = sigma
+                            g.stock_info[security]['ratio'] = stock_best_range['ratio']
+                            g.stock_info[security]['sigma'] = sigma
                         else:
-                            account.stock_info[security]['ratio'] = 0
-                            account.stock_info[security]['sigma'] = 0
-                    account.stock_info[security]['type'] = 'down'
+                            g.stock_info[security]['ratio'] = 0
+                            g.stock_info[security]['sigma'] = 0
+                    g.stock_info[security]['type'] = 'down'
                     to_buy.append(security)
                     log.info(['WAVE Down tobuy',security])
-                elif account.stock_info[security]['WR'] == -1 and security not in account.overbought and account.positions[security].total_amount==0: #CCI > 100
-                    account.stock_info[security]['type'] = 'up'
+                elif g.stock_info[security]['WR'] == -1 and security not in g.overbought and account.positions[security].total_amount==0: #CCI > 100
+                    g.stock_info[security]['type'] = 'up'
                     to_buy.append(security)
                     log.info(['WAVE Up tobuy',security])
     return to_buy
@@ -830,13 +830,13 @@ def wave_sell_signal(account,data,securities):
             cur_price = data.current(security)[security].open
             if paused ==0:
                 #如果超出止赢点或者止损点或者到达股票最大持有时间，则卖出
-                if account.stock_info[security]['type'] == 'up':
+                if g.stock_info[security]['type'] == 'up':
                     balance(account,data,security)
-                elif account.stock_info[security]['avgreg_profit_limit']<=cur_price or account.stock_info[security]['avgreg_loss_limit']>=cur_price or account.stock_info[security]['days']<=0:
+                elif g.stock_info[security]['avgreg_profit_limit']<=cur_price or g.stock_info[security]['avgreg_loss_limit']>=cur_price or g.stock_info[security]['days']<=0:
                     log.info(['wave tosell',security])
                     to_sell.append(security)
-                elif account.stock_info[security]['type'] == 'down':
-                    account.stock_info[security]['days']-=1
+                elif g.stock_info[security]['type'] == 'down':
+                    g.stock_info[security]['days']-=1
                     balance_for_avgreg(account,data,security)                                            
                     
     return to_sell
@@ -853,7 +853,7 @@ def wave_sell_stock(account,data,tosell):
             
             if order != None:
                 init_wave_security(account,data,security)
-                account.stock_info[security]['position']=0
+                g.stock_info[security]['position']=0
                 remove.add(security)
     return remove
         
@@ -863,9 +863,9 @@ def wave_sell_stock(account,data,tosell):
 def wave_buy_stock(account,data,tosell,tobuy):
     for security in tobuy:        
         if security not in account.positions and security not in tosell:
-            if account.stock_info[security]['type'] == 'down':
+            if g.stock_info[security]['type'] == 'down':
                 balance_for_avgreg(account,data,security)
-                account.stock_info[security]['days']=account.after_days-1
+                g.stock_info[security]['days']=account.after_days-1
             else:
                 balance(account,data,security)
     
@@ -1190,7 +1190,7 @@ def sell_stocks(account,data,tosell):
 
             if order != None:
                 init_wave_security(account,data,security)
-                account.stock_info[security]['position']=0
+                g.stock_info[security]['position']=0
                 remove.add(security)
     #log.info(['in sell_stocks remove:',remove])
     return remove
